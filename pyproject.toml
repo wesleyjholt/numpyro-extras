@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "numpyro-extras"
+dynamic = ["version"]
+description = 'A collection of nice-to-have utilities that build off the NumPyro probabilistic programming language'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "Wesley Holt", email = "wesleyjholt@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "numpyro",
+  "equinox",
+  "interpax",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8",
+]
+
+[project.urls]
+Documentation = "https://github.com/Wesley Holt/numpyro-extras#readme"
+Issues = "https://github.com/Wesley Holt/numpyro-extras/issues"
+Source = "https://github.com/Wesley Holt/numpyro-extras"
+
+[tool.hatch.version]
+path = "src/numpyro_extras/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/numpyro_extras tests}"
+
+[tool.coverage.run]
+source_pkgs = ["numpyro_extras", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/numpyro_extras/__about__.py",
+]
+
+[tool.coverage.paths]
+numpyro_extras = ["src/numpyro_extras", "*/numpyro-extras/src/numpyro_extras"]
+tests = ["tests", "*/numpyro-extras/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
