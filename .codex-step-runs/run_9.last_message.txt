@@ -1,0 +1,11 @@
+Completed exactly one step: **Step 09**.
+
+Changes made:
+- Implemented `UniformToMixtureTransform` and `NormalToMixtureTransform` in `src/numpyro_extras/transforms.py`.
+- Added required forward/inverse methods, Jacobians, domain/codomain, and pytree `tree_flatten` / `tree_unflatten`.
+- Exported new classes via `__all__` in `src/numpyro_extras/transforms.py`.
+- Marked Step 09 as complete in `checklist.md`.
+
+Validation run:
+- `PYTHONPATH=src pytest -q tests/test_mixture_transforms.py tests/test_transforms.py`
+- Result: **56 passed**.

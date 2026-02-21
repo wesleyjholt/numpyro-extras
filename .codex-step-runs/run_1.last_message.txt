@@ -1,0 +1,9 @@
+Completed exactly one step: **Step 01**.
+
+Changes made:
+- Added `tests/test_mixture_quantile.py` with the required test-first contract for the mixture inverse-CDF backend.
+- Marked Step 01 as complete in `checklist.md`.
+
+Validation run:
+- `PYTHONPATH=src pytest -q tests/test_mixture_quantile.py`
+- Result: fails as expected because `numpyro_extras.mixture_quantile` is not implemented yet (Step 06 work).

@@ -1,0 +1,15 @@
+Completed exactly one step: **Step 03**.
+
+Changes made:
+- Added `tests/test_quantile_interpolator.py` with:
+  - API contract tests
+  - roundtrip/inverse consistency tests
+  - monotonicity and derivative positivity tests
+  - stitch value/slope continuity tests (with explicit tail formulas in comments)
+  - tail finiteness/validity tests
+  - `jit`/`vmap` compatibility tests
+  - reusable fixtures: smooth interior, tail-stress, near-degenerate slope
+- Updated `checklist.md` to mark Step 03 as complete.
+
+Validation run:
+- `python -m py_compile tests/test_quantile_interpolator.py` (passed).

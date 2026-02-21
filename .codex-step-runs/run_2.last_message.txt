@@ -1,0 +1,10 @@
+Completed exactly one step: **Step 02**.
+
+Changes made:
+1. Added the Task 07 pre-implementation knot-generation test suite in `tests/test_mixture_knots.py`.
+2. Marked Step 02 complete in `checklist.md:5`.
+
+Validation run:
+1. `python -m py_compile tests/test_mixture_knots.py` passed.
+
+Stopped after this single step.

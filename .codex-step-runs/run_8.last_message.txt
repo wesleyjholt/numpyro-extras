@@ -1,0 +1,16 @@
+Completed exactly one assigned step: **Step 08**.
+
+Changes made:
+- Added `src/numpyro_extras/quantile_interpolator.py` implementing `QuantileInterpolator1D` with:
+  - `icdf`, `cdf`, `dudx`, `dxdu`, `log_abs_dxdu`, `stitch_points`
+  - interior monotone interpolation
+  - sigmoid tails with inverse tails
+  - numeric safety/clipping and knot validation/cleanup
+- Updated exports in `src/numpyro_extras/__init__.py`
+- Marked Step 08 complete in `checklist.md`
+
+Validation run:
+- `PYTHONPATH=src pytest -q tests/test_quantile_interpolator.py`
+- Result: **11 passed**
+
+Stopped after this single step, as requested.

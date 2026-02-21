@@ -1,0 +1,16 @@
+Step 06 is complete and marked in `checklist.md`.
+
+Changes made:
+- Added `src/numpyro_extras/mixture_quantile.py` with:
+  - `build_mixture_quantile_backend(...)`
+  - `MixtureQuantileBackend.cdf(x)`
+  - `MixtureQuantileBackend.log_prob(x)`
+  - `MixtureQuantileBackend.icdf(u)`
+  - `MixtureQuantileBackend.icdf_with_status(u)`
+  - `MixtureQuantileBackend.validate()`
+- Updated exports in `src/numpyro_extras/__init__.py`.
+- Marked Step 06 as complete in `checklist.md`.
+
+Validation run:
+- `PYTHONPATH=src pytest -q tests/test_mixture_quantile.py`
+- Result: `23 passed`

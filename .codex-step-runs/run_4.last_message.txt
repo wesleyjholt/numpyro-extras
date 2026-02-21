@@ -1,0 +1,9 @@
+Completed exactly one step: **Step 04**.
+
+Changes made:
+- Added `tests/test_mixture_transforms.py` with the required transform-wrapper test suite and deterministic `MockInterpolator` fixture.
+- Updated `checklist.md` to mark Step 04 as complete.
+
+Verification run:
+- `PYTHONPATH=src pytest -q tests/test_mixture_transforms.py`
+- Result: 7 failures, all due to missing `UniformToMixtureTransform` / `NormalToMixtureTransform` in `numpyro_extras.transforms` (expected at this stage before Step 09 implementation).

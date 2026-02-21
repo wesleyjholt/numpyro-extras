@@ -1,0 +1,13 @@
+Completed Step 05 only.
+
+Changes made:
+- Added `tests/test_mixture_transform_builder.py` (14 integration/contract tests for Task 10).
+- Added `tests/test_mixture_transform_performance_smoke.py` (non-gating performance smoke test).
+- Updated `checklist.md` to mark Step 05 as complete.
+
+Validation run:
+- `python -m py_compile tests/test_mixture_transform_builder.py tests/test_mixture_transform_performance_smoke.py`
+- `pytest tests/test_mixture_transform_builder.py --collect-only -q` (14 tests collected)
+- `pytest tests/test_mixture_transform_performance_smoke.py --collect-only -q` (1 test collected)
+
+Stopped after this single assigned step.

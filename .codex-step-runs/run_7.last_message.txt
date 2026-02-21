@@ -1,0 +1,15 @@
+Completed exactly one assigned step: **Step 07 - Implement knot generation**.
+
+Changes made:
+- Added `src/numpyro_extras/mixture_knots.py` with:
+  - `QuantileKnotSet` (immutable dataclass)
+  - `KnotConfig`, `SlopeConfig`
+  - `build_quantile_knot_set(...)`
+  - Grid modes (`uniform_u`, `logit_u`, `hybrid`)
+  - Non-finite filtering, strict `u` enforcement, monotonic cleanup, endpoint slope estimation, and required metadata fields
+- Updated checklist status:
+  - `checklist.md` now marks Step 07 as complete (`[x]`)
+
+Validation run:
+- `PYTHONPATH=src pytest -q tests/test_mixture_knots.py`
+- Result: `14 passed, 1 skipped`
