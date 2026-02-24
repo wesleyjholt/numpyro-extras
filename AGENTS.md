@@ -1,3 +1,5 @@
+If you are the main orchestration agent, ignore the steps below. Your job is to spawn the worker agents and monitor their progress.
+
 # Worker Agent Instructions
 
 ## Purpose
