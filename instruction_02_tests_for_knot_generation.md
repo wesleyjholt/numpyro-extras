@@ -42,6 +42,7 @@ For each grid mode (`uniform_u`, `logit_u`, `hybrid`):
 1. Endpoint slopes finite and positive.
 2. Slope floor behavior when `dx` is tiny.
 3. Regression test for duplicate or near-duplicate `x` values.
+4. Treat returned endpoint slopes as optional seeds for non-C1 fallback, not as the canonical C1 stitch slope.
 
 ### 5) Metadata quality tests
 1. `meta` includes required keys:
@@ -56,6 +57,7 @@ For each grid mode (`uniform_u`, `logit_u`, `hybrid`):
 ### 7) JAX behavior tests
 1. JIT compatibility for core knot generation function (if supported by API).
 2. Vectorized backend interactions behave deterministically.
+3. Core path stays JAX-native without requiring NumPy host fallback.
 
 ## Required Assertions
 1. `jnp.all(jnp.diff(u_knots) > 0)` must hold.

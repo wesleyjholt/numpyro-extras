@@ -15,6 +15,9 @@ Expected entrypoints:
 1. `instruction_10_integration_and_validation.md`.
 2. Availability of component modules from Tasks 06-09 (or mocks until complete).
 3. Representative mixture configurations for smoke and stress tests.
+4. Cross-task contract from Agent 08:
+   - interpolator interior uses `interpax` in a JAX-native runtime path,
+   - C1 stitching uses interior boundary gradients when enabled.
 
 ## Outputs (Contract for This Agent)
 1. Test file: `tests/test_mixture_transform_builder.py`.
@@ -50,6 +53,7 @@ Expected entrypoints:
 1. Custom nested configs are honored by downstream steps.
 2. Invalid config values fail fast with useful error text.
 3. Default config object is deterministic and reproducible.
+4. Tail/interpolation diagnostics encode stitch provenance (for example, whether C1 stitching is enabled and boundary slope source).
 
 ### 5) Failure-path tests
 1. Invalid weights and bad parameter shapes are rejected.
@@ -60,6 +64,7 @@ Expected entrypoints:
 1. Builder outputs are JIT-compatible where expected.
 2. Batch inputs through built transforms preserve shape.
 3. Smoke test both `uniform` and `normal` bases on same mixture.
+4. E2E runtime path remains JAX-native without NumPy host-fallback in interpolation/transform execution.
 
 ### 7) Performance smoke tests (non-gating)
 1. Track build time for default config.

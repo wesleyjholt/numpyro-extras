@@ -24,6 +24,9 @@ Task 04 test specification must be completed first, and Task 09 implementation m
 ## Required Upstream Dependency
 From Agent 08:
 1. `QuantileInterpolator1D` exposing `icdf(u)`, `cdf(x)`, `dxdu(u)` or `log_abs_dxdu(u)`.
+2. Interpolator contract assumptions to preserve (must not be reimplemented in transforms):
+   - interior interpolation is `interpax`-based and JAX-native,
+   - C1 stitch slopes come from interior interpolator boundary gradients when `enforce_c1_stitch=True`.
 
 ## Inputs (Contract)
 1. `interpolator: QuantileInterpolator1D`
@@ -91,12 +94,14 @@ Jacobian (forward `z -> y`):
 ### 5) Vectorization and compilation
 - Support scalar and batched inputs.
 - JIT-safe with no Python branching on traced values.
+- Do not introduce NumPy host fallbacks (`np.asarray`-style runtime coercion) in transform forward/inverse/Jacobian paths.
 
 ## Edge Cases to Handle
 1. Input values at/near boundaries (`u=0`, `u=1`).
 2. Very extreme normal inputs (`|z| > 8`).
 3. Approximation-induced tiny negative derivatives (clip/floor before `log`).
 4. Shape broadcasting for batch/event dims.
+5. Preserve boundary behavior implied by Agent 08 C1 stitching; transform wrappers must not add alternate tail-switch logic that conflicts with interpolator stitch semantics.
 
 ## Validation and Acceptance Tests
 In `tests/test_mixture_transforms.py`:

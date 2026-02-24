@@ -26,6 +26,7 @@ From Agent 07:
 
 From Agent 08:
 3. `QuantileInterpolator1D`.
+   - must satisfy the Agent 08 contract: `interpax`-based interior interpolation, JAX-native runtime path, and C1 stitch slope from interior boundary gradient when enabled.
 
 From Agent 09:
 4. `UniformToMixtureTransform`, `NormalToMixtureTransform`.
@@ -69,9 +70,10 @@ Return object should include accessible references (or metadata) for:
 ### 1) Factory assembly pipeline
 Implement exact sequence:
 1. Build quantile backend (Agent 06).
-2. Generate knots and slopes (Agent 07).
+2. Generate knots and optional endpoint slope seeds (Agent 07).
 3. Construct interpolator with sigmoid tails (Agent 08).
 4. Wrap in requested transform class (Agent 09).
+5. Preserve Agent 08 stitch semantics end-to-end; do not override C1 slope source in builder/wrapper layers.
 
 ### 2) Config model
 - Define explicit dataclasses:
@@ -91,6 +93,7 @@ Implement exact sequence:
   - invalid knot set,
   - non-monotone interpolator.
 - Surface diagnostics structure in returned object or attached metadata.
+- Include interpolation diagnostics indicating stitch configuration/provenance (for example whether C1 stitching is enabled and boundary slope source).
 
 ### 4) End-to-end quality checks (automated tests)
 Must include:
@@ -102,6 +105,8 @@ Must include:
    - Extreme percentiles remain finite and monotone.
 4. **Jacobian consistency**
    - Numerical finite-difference spot checks.
+5. **JAX execution path**
+   - `jit`/`vmap` e2e checks for build and forward/inverse evaluations, with no NumPy host-fallback requirement in the runtime interpolation/transform path.
 
 ### 5) Performance smoke checks
 - Add lightweight benchmark-like tests (not strict perf gates) recording:

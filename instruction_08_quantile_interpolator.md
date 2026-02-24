@@ -6,6 +6,7 @@ Build a standalone interpolator object that provides fast, stable bidirectional 
 - `u(x)` approximating CDF
 
 Use interior interpolation over knots and ECDF-style sigmoid tails (`tanh`/`arctanh`) for smooth, stable endpoint extrapolation.
+The interior interpolator must be implemented with `interpax` so execution remains JAX-native (jit/vmap-friendly) without forcing arrays through NumPy.
 
 ## Precondition
 Task 03 test specification must be completed first, and Task 08 implementation must satisfy those tests.
@@ -58,12 +59,18 @@ All outputs must be JAX-compatible and vectorizable.
 - Construct interior map from knots:
   - `x(u)` using `u_knots -> x_knots`.
   - `u(x)` using `x_knots -> u_knots`.
+- Use `interpax` interpolation primitives for both directions. Do not introduce NumPy-based interpolation codepaths.
+- Keep all interpolation state in JAX arrays (no `np.asarray`/NumPy coercion in the runtime interpolation path).
 - Choose method supporting stable monotone behavior. If chosen method can overshoot, add clipping/guardrails.
 
 ### 2) Tail formulas (must mirror ECDF scaler concept)
 Define:
 - Left knot `(x0, u0)`, right knot `(xN, uN)`.
 - Endpoint slopes in CDF space: `m0 = du/dx|x0`, `mN = du/dx|xN`.
+
+Slope source rules:
+- If `enforce_c1_stitch=True`, compute `m0` and `mN` from the interior interpolator derivative evaluated at the boundary from the interior side (not from finite differences of adjacent knot pairs).
+- If `enforce_c1_stitch=False`, fallback to externally supplied endpoint slopes (e.g. from knot metadata) is allowed, with positivity/finite checks and floor guards.
 
 CDF tails (`u(x)`):
 1. Left:
@@ -94,7 +101,7 @@ Requirements:
 ### 4) Derivatives
 - Implement `dudx(x)` and `dxdu(u)`:
   - Prefer analytic derivatives in tails.
-  - For interior, use either interpolator derivative if available or `jax.grad`.
+  - For interior, use interpolator-provided derivative from `interpax` (or `jax.grad` on the `interpax` map when direct derivative API is unavailable).
 - Ensure positivity (monotonic bijection) up to tolerance.
 
 ### 5) Numerical protections
@@ -107,6 +114,7 @@ Requirements:
 2. Near-zero endpoint slopes.
 3. Dense knots with tiny spacing.
 4. Inputs outside nominal domain due to upstream noise.
+5. Traced execution (`jit`/`vmap`) without host NumPy fallback.
 
 ## Validation and Acceptance Tests
 In `tests/test_quantile_interpolator.py`:

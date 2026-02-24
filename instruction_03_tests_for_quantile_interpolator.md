@@ -43,8 +43,11 @@ Verify object exposes:
 ### 4) Stitch continuity tests (critical)
 At both boundaries (`u0/x0`, `uN/xN`):
 1. Value continuity across piecewise branch switch.
-2. First-derivative continuity across switch (`C1` requirement).
+2. First-derivative continuity across switch (`C1` requirement), where boundary slope is taken from the interior interpolator gradient.
 3. No discontinuity spikes under finite differencing.
+
+Additional requirement:
+- Include a regression test that would fail if C1 slope is computed from adjacent-knot finite differences instead of interior interpolator derivative.
 
 ### 5) Tail behavior tests
 1. Extreme `u` values remain finite in `icdf`.
@@ -59,6 +62,7 @@ At both boundaries (`u0/x0`, `uN/xN`):
 ### 7) JAX behavior tests
 1. `jit` compile for `cdf`, `icdf`, and derivative calls.
 2. `vmap` compatibility over input vectors.
+3. No NumPy fallback in interpolation runtime path (all traced ops remain JAX-native).
 
 ## Required Tolerances
 1. Interior roundtrip: `< 1e-4`.

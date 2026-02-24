@@ -1,7 +1,7 @@
 # Agent Task 07: Inverse-CDF -> Interpolation Knot Generator
 
 ## Objective
-Generate high-quality interpolation knots `(u_i, x_i)` from the root-based inverse-CDF backend, including endpoint slope estimates required for stable sigmoid-tail stitching.
+Generate high-quality interpolation knots `(u_i, x_i)` from the root-based inverse-CDF backend, optionally including endpoint slope seeds for non-C1 fallback tail stitching.
 
 This agent converts expensive root solves into reusable tabulated geometry.
 
@@ -13,7 +13,7 @@ Task 02 test specification must be completed first, and Task 07 implementation m
   - Grid design in probability space `u`.
   - Quantile evaluation `x_i = Q(u_i)`.
   - Knot post-processing (strict ordering, finite-value filtering).
-  - Endpoint slope estimation.
+  - Optional endpoint slope seeds for non-C1 fallback modes.
 - Out of scope:
   - Interpolator implementation.
   - NumPyro transform classes.
@@ -45,7 +45,8 @@ Return an immutable dataclass `QuantileKnotSet` with:
 1. `u_knots: Array[N]` strictly increasing.
 2. `x_knots: Array[N]` nondecreasing and finite.
 3. `du_dx_left: float` and `du_dx_right: float`
-   - endpoint slopes for CDF-space stitching (`u(x)` tails).
+   - optional endpoint slope seeds for CDF-space tails when `enforce_c1_stitch=False`.
+   - C1 stitching in Agent 08 must not depend on finite-difference knot slopes.
 4. `meta: dict`
    - grid strategy, `N`, clip epsilon, and quality metrics.
 
@@ -73,6 +74,7 @@ Defaults should favor better tail fidelity (`logit_u`).
 - Evaluate `x_i = icdf(u_i)` with vectorized calls.
 - Remove any non-finite points; if removals are non-trivial, report in `meta`.
 - Enforce strict `u` increase using `min_delta_u`.
+- Keep the workflow JAX-native and jit/vmap compatible; avoid mandatory NumPy host conversions in the core path.
 
 ### 3) Monotonic cleanup
 - If numerical noise causes non-monotone `x_knots`, repair minimally:
@@ -80,12 +82,16 @@ Defaults should favor better tail fidelity (`logit_u`).
 - Record cleanup strategy and count in `meta`.
 
 ### 4) Endpoint slope estimation
-Need `du/dx` at left and right knots for the ECDF sigmoid-tail formulas.
+Need optional `du/dx` seeds at left and right knots for non-C1 tail fallback modes.
 
-- Preferred estimation:
-  - local finite difference in `u(x)` space using nearest knot pairs.
-  - left slope: `(u1-u0)/(x1-x0)`
-  - right slope: `(uN-uN-1)/(xN-xN-1)`
+- Important:
+  - Agent 08 C1 stitching must compute endpoint slope from the interior interpolator gradient at the stitch boundary.
+  - Finite-difference knot slopes must not be treated as the canonical C1 slope.
+
+- Acceptable estimation for optional seeds:
+  - robust local finite-difference proxy in `u(x)` space using nearest knot pairs.
+  - left seed: `(u1-u0)/(x1-x0)`
+  - right seed: `(uN-uN-1)/(xN-xN-1)`
 - Stabilize:
   - floor slopes at `min_positive_slope`.
   - guard against division by tiny `dx`.
@@ -120,7 +126,7 @@ In `tests/test_mixture_knots.py`:
 ## Deliverables Checklist
 - [ ] `QuantileKnotSet` dataclass and constructor utility.
 - [ ] Deterministic knot-generation pipeline.
-- [ ] Endpoint slope estimator.
+- [ ] Optional endpoint slope-seed estimator for non-C1 fallback.
 - [ ] Tests covering all grid modes.
 
 ## Handoff to Next Agent

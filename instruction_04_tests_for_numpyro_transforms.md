@@ -16,6 +16,9 @@ Expected classes:
 2. A deterministic mock/stub interpolator implementing:
    - `icdf`, `cdf`, `dxdu`, `log_abs_dxdu`.
 3. NumPyro transform conventions from existing code style.
+4. Agent 08 contract assumptions:
+   - interior interpolation is `interpax`-based and JAX-native,
+   - C1 stitch slopes are sourced from interior interpolator boundary gradients when enabled.
 
 ## Outputs (Contract for This Agent)
 1. Test file: `tests/test_mixture_transforms.py`.
@@ -47,11 +50,13 @@ For each class:
 1. Uniform inputs at exact 0 and 1 are handled according to clipping policy.
 2. Near-boundary values do not produce NaN/Inf.
 3. Extreme normal inputs (`|z| > 8`) stay numerically stable.
+4. Wrapper behavior remains consistent with interpolator stitch semantics (no extra wrapper-level tail switching that changes boundary behavior).
 
 ### 5) Batch/JAX compatibility tests
 1. Batched forward and inverse calls preserve shape.
 2. `jit` compile both transforms.
 3. `vmap` over batches works.
+4. Runtime path stays JAX-native (no NumPy host fallback such as `np.asarray` coercion in forward/inverse/Jacobian code paths).
 
 ### 6) Serialization and determinism tests
 1. Pytree flatten/unflatten reproduces outputs exactly or within tolerance.
