@@ -1,7 +1,7 @@
 """Step 02 manifest for Task 07 knot generation.
 
 Required module:
-- `numpyro_extras.mixture_knots` (expected file: `src/numpyro_extras/mixture_knots.py`)
+- `numpyro_extras.quantile_knots` (expected file: `src/numpyro_extras/quantile_knots.py`)
 
 Required public API:
 - `QuantileKnotSet` immutable dataclass
@@ -29,7 +29,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
 
-MODULE_NAME = "numpyro_extras.mixture_knots"
+MODULE_NAME = "numpyro_extras.quantile_knots"
 KNOTSET_TYPE_NAME = "QuantileKnotSet"
 KNOT_BUILDER_NAME = "build_quantile_knot_set"
 
@@ -55,28 +55,28 @@ REQUIRED_META_KEYS = {
 }
 
 
-def _import_mixture_knots_module() -> ModuleType:
+def _import_quantile_knots_module() -> ModuleType:
     try:
         return importlib.import_module(MODULE_NAME)
     except ModuleNotFoundError as exc:
         if exc.name in {MODULE_NAME, "numpyro_extras"}:
             pytest.fail(
-                "Missing module `numpyro_extras.mixture_knots` "
-                "(expected at `src/numpyro_extras/mixture_knots.py`)."
+                "Missing module `numpyro_extras.quantile_knots` "
+                "(expected at `src/numpyro_extras/quantile_knots.py`)."
             )
         raise
 
 
 def _get_required_api():
-    module = _import_mixture_knots_module()
+    module = _import_quantile_knots_module()
     knotset_type = getattr(module, KNOTSET_TYPE_NAME, None)
     if knotset_type is None:
-        pytest.fail("Missing `QuantileKnotSet` in `numpyro_extras.mixture_knots`.")
+        pytest.fail("Missing `QuantileKnotSet` in `numpyro_extras.quantile_knots`.")
 
     builder = getattr(module, KNOT_BUILDER_NAME, None)
     if builder is None:
         pytest.fail(
-            "Missing `build_quantile_knot_set` in `numpyro_extras.mixture_knots`."
+            "Missing `build_quantile_knot_set` in `numpyro_extras.quantile_knots`."
         )
     if not callable(builder):
         pytest.fail("`build_quantile_knot_set` must be callable.")

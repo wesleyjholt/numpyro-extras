@@ -485,3 +485,43 @@ def test_jit_and_vmap_compatibility(smooth_knot_set):
     icdf_jaxpr = jax.make_jaxpr(interpolator.icdf)(u)
     assert len(cdf_jaxpr.jaxpr.eqns) > 0
     assert len(icdf_jaxpr.jaxpr.eqns) > 0
+
+
+def test_root_find_icdf_cdf_mode_matches_default_forward_path(smooth_knot_set):
+    default_interpolator = _build_interpolator(
+        smooth_knot_set,
+        interp_cfg=_make_interp_cfg(cdf_eval_method="interpolate"),
+    )
+    root_find_interpolator = _build_interpolator(
+        smooth_knot_set,
+        interp_cfg=_make_interp_cfg(
+            cdf_eval_method="root_find_icdf",
+            cdf_root_max_steps=80,
+            cdf_root_u_tol=1e-12,
+        ),
+    )
+
+    u = jnp.linspace(1e-8, 1.0 - 1e-8, 2049, dtype=jnp.float64)
+    x_default = default_interpolator.icdf(u)
+    x_root = root_find_interpolator.icdf(u)
+    assert jnp.allclose(x_root, x_default, atol=1e-12, rtol=1e-12), (
+        "Inverse-CDF-first mode must preserve the forward `icdf` path exactly."
+    )
+
+    u_roundtrip = root_find_interpolator.cdf(x_root)
+    max_roundtrip_err = float(jnp.max(jnp.abs(u_roundtrip - u)))
+    assert max_roundtrip_err < 1e-4, (
+        f"Root-find `cdf(icdf(u))` tolerance violated: max_err={max_roundtrip_err:.3e}"
+    )
+
+    dxdu = root_find_interpolator.dxdu(u)
+    dudx = root_find_interpolator.dudx(x_root)
+    reciprocal_err = float(jnp.max(jnp.abs(dxdu * dudx - 1.0)))
+    assert reciprocal_err < 1e-2, (
+        "Root-find CDF mode must keep derivative reciprocity under control; "
+        f"max_err={reciprocal_err:.3e}"
+    )
+
+    cdf_jit = jax.jit(root_find_interpolator.cdf)
+    vmapped_cdf = jax.vmap(lambda xi: root_find_interpolator.cdf(xi))(x_root)
+    assert jnp.allclose(cdf_jit(x_root), vmapped_cdf, atol=1e-9, rtol=1e-9)

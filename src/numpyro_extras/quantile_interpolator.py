@@ -15,6 +15,9 @@ class InterpConfig:
     interior_method: str = "akima"
     clip_u_eps: float = 1e-10
     safe_arctanh_eps: float = 1e-7
+    cdf_eval_method: str = "interpolate"
+    cdf_root_max_steps: int = 64
+    cdf_root_u_tol: float = 1e-10
 
 
 @dataclass(frozen=True)
@@ -70,6 +73,18 @@ def _validate_interp_cfg(cfg: InterpConfig) -> None:
         raise ValueError(
             "`safe_arctanh_eps` must be finite and satisfy 0 < safe_arctanh_eps < 1."
         )
+    if cfg.cdf_eval_method not in {"interpolate", "root_find_icdf"}:
+        raise ValueError(
+            "`cdf_eval_method` must be one of {'interpolate', 'root_find_icdf'}."
+        )
+    if int(cfg.cdf_root_max_steps) <= 0:
+        raise ValueError("`cdf_root_max_steps` must be > 0.")
+    if not jnp.isfinite(cfg.cdf_root_u_tol) or not (
+        0.0 < float(cfg.cdf_root_u_tol) < 0.5
+    ):
+        raise ValueError(
+            "`cdf_root_u_tol` must be finite and satisfy 0 < cdf_root_u_tol < 0.5."
+        )
 
 
 def _validate_tail_cfg(cfg: TailConfig) -> None:
@@ -100,11 +115,15 @@ class QuantileInterpolator1D:
     mN: jax.Array
     clip_u_eps: float
     safe_arctanh_eps: float
+    cdf_eval_method: str
+    cdf_root_max_steps: int
+    cdf_root_u_tol: float
     min_tail_scale: float
     enforce_c1_stitch: bool
     interior_method: str
     stitch_h: float
     _x_of_u_value_interp: Interpolator1D
+    _x_of_u_slope_interp: Interpolator1D
     _u_of_x_value_interp: Interpolator1D
     _u_of_x_slope_interp: Interpolator1D
 
@@ -146,6 +165,9 @@ class QuantileInterpolator1D:
         x_of_u_value_interp = Interpolator1D(
             u_knots, x_knots, method=value_method, extrap=False
         )
+        x_of_u_slope_interp = Interpolator1D(
+            u_knots, x_knots, method=slope_method, extrap=False
+        )
         u_of_x_value_interp = Interpolator1D(
             x_knots, u_knots, method=value_method, extrap=False
         )
@@ -185,11 +207,15 @@ class QuantileInterpolator1D:
         object.__setattr__(
             self, "safe_arctanh_eps", float(interp_cfg_obj.safe_arctanh_eps)
         )
+        object.__setattr__(self, "cdf_eval_method", str(interp_cfg_obj.cdf_eval_method))
+        object.__setattr__(self, "cdf_root_max_steps", int(interp_cfg_obj.cdf_root_max_steps))
+        object.__setattr__(self, "cdf_root_u_tol", float(interp_cfg_obj.cdf_root_u_tol))
         object.__setattr__(self, "min_tail_scale", float(tail_cfg_obj.min_tail_scale))
         object.__setattr__(self, "enforce_c1_stitch", bool(tail_cfg_obj.enforce_c1_stitch))
         object.__setattr__(self, "interior_method", str(interp_cfg_obj.interior_method))
         object.__setattr__(self, "stitch_h", float(cdf_blend_h))
         object.__setattr__(self, "_x_of_u_value_interp", x_of_u_value_interp)
+        object.__setattr__(self, "_x_of_u_slope_interp", x_of_u_slope_interp)
         object.__setattr__(self, "_u_of_x_value_interp", u_of_x_value_interp)
         object.__setattr__(self, "_u_of_x_slope_interp", u_of_x_slope_interp)
 
@@ -201,8 +227,7 @@ class QuantileInterpolator1D:
         eps = jnp.asarray(self.safe_arctanh_eps, dtype=self.u_knots.dtype)
         return jnp.clip(z, -1.0 + eps, 1.0 - eps)
 
-    def cdf(self, x: Any) -> jax.Array:
-        x_arr = jnp.asarray(x, dtype=self.x_knots.dtype)
+    def _cdf_via_interpolation(self, x_arr: jax.Array) -> jax.Array:
         left = x_arr < self.x0
         right = x_arr > self.xN
         interior_x = jnp.clip(x_arr, self.x0, self.xN)
@@ -231,6 +256,83 @@ class QuantileInterpolator1D:
         u = jnp.where(left, u_left, jnp.where(right, u_right, u_interior))
         return jnp.clip(u, 0.0, 1.0)
 
+    def _dxdu_direct(self, u: Any) -> jax.Array:
+        u_arr = self._clip_u(u)
+        left = u_arr < self.u0
+        right = u_arr > self.uN
+        interior_u = jnp.clip(u_arr, self.u0, self.uN)
+        dxdu_interior = jnp.asarray(
+            self._x_of_u_slope_interp(interior_u, dx=1), dtype=self.x_knots.dtype
+        )
+
+        tiny = jnp.asarray(jnp.finfo(self.u0.dtype).tiny, dtype=self.u0.dtype)
+        u0_scale = jnp.maximum(self.u0, tiny)
+        one_minus_uN = 1.0 - self.uN
+        uN_scale = jnp.maximum(one_minus_uN, tiny)
+
+        z_left = self._clip_arctanh_arg((u_arr - self.u0) / u0_scale)
+        z_right = self._clip_arctanh_arg((u_arr - self.uN) / uN_scale)
+        dxdu_left = 1.0 / (self.m0 * jnp.maximum(1.0 - z_left**2, tiny))
+        dxdu_right = 1.0 / (self.mN * jnp.maximum(1.0 - z_right**2, tiny))
+
+        dxdu = jnp.where(left, dxdu_left, jnp.where(right, dxdu_right, dxdu_interior))
+        finite_dxdu = jnp.where(jnp.isfinite(dxdu), dxdu, tiny)
+        return jnp.maximum(finite_dxdu, tiny)
+
+    def _cdf_via_icdf_root_find_scalar(self, x_scalar: jax.Array) -> jax.Array:
+        dtype = self.u_knots.dtype
+        x_scalar = jnp.asarray(x_scalar, dtype=dtype)
+        lo0 = jnp.asarray(self.clip_u_eps, dtype=dtype)
+        hi0 = jnp.asarray(1.0 - self.clip_u_eps, dtype=dtype)
+        x_lo = self.icdf(lo0)
+        x_hi = self.icdf(hi0)
+        u_tol = jnp.asarray(self.cdf_root_u_tol, dtype=dtype)
+        max_steps = jnp.asarray(self.cdf_root_max_steps, dtype=jnp.int32)
+
+        def _solve_root(_: None) -> jax.Array:
+            def _cond(state: tuple[jax.Array, jax.Array, jax.Array]) -> jax.Array:
+                lo, hi, step = state
+                return (step < max_steps) & ((hi - lo) > u_tol)
+
+            def _body(state: tuple[jax.Array, jax.Array, jax.Array]) -> tuple[jax.Array, jax.Array, jax.Array]:
+                lo, hi, step = state
+                mid = 0.5 * (lo + hi)
+                x_mid = self.icdf(mid)
+                move_right = x_mid < x_scalar
+                lo_next = jnp.where(move_right, mid, lo)
+                hi_next = jnp.where(move_right, hi, mid)
+                return lo_next, hi_next, step + jnp.asarray(1, dtype=jnp.int32)
+
+            lo_f, hi_f, _ = jax.lax.while_loop(
+                _cond,
+                _body,
+                (lo0, hi0, jnp.asarray(0, dtype=jnp.int32)),
+            )
+            return 0.5 * (lo_f + hi_f)
+
+        return jax.lax.cond(
+            x_scalar <= x_lo,
+            lambda _: lo0,
+            lambda _: jax.lax.cond(
+                x_scalar >= x_hi,
+                lambda __: hi0,
+                _solve_root,
+                operand=None,
+            ),
+            operand=None,
+        )
+
+    def _cdf_via_icdf_root_find(self, x_arr: jax.Array) -> jax.Array:
+        flat_x = x_arr.reshape(-1)
+        flat_u = jax.vmap(self._cdf_via_icdf_root_find_scalar)(flat_x)
+        return flat_u.reshape(x_arr.shape)
+
+    def cdf(self, x: Any) -> jax.Array:
+        x_arr = jnp.asarray(x, dtype=self.x_knots.dtype)
+        if self.cdf_eval_method == "root_find_icdf":
+            return self._cdf_via_icdf_root_find(x_arr)
+        return self._cdf_via_interpolation(x_arr)
+
     def icdf(self, u: Any) -> jax.Array:
         u_arr = self._clip_u(u)
         left = u_arr < self.u0
@@ -254,6 +356,16 @@ class QuantileInterpolator1D:
         return jnp.where(left, x_left, jnp.where(right, x_right, x_interior))
 
     def dudx(self, x: Any) -> jax.Array:
+        if self.cdf_eval_method == "root_find_icdf":
+            u_vals = self.cdf(x)
+            dxdu_vals = self._dxdu_direct(u_vals)
+            tiny = jnp.asarray(jnp.finfo(dxdu_vals.dtype).tiny, dtype=dxdu_vals.dtype)
+            safe_dxdu = jnp.maximum(
+                jnp.where(jnp.isfinite(dxdu_vals), dxdu_vals, tiny),
+                tiny,
+            )
+            return 1.0 / safe_dxdu
+
         x_arr = jnp.asarray(x, dtype=self.x_knots.dtype)
         left = x_arr < self.x0
         right = x_arr > self.xN
@@ -277,6 +389,9 @@ class QuantileInterpolator1D:
         return jnp.maximum(finite_dudx, tiny)
 
     def dxdu(self, u: Any) -> jax.Array:
+        if self.cdf_eval_method == "root_find_icdf":
+            return self._dxdu_direct(u)
+
         u_arr = self._clip_u(u)
         x_arr = self.icdf(u_arr)
         dudx_vals = self.dudx(x_arr)
@@ -299,6 +414,7 @@ class QuantileInterpolator1D:
             "mN": float(self.mN),
             "enforce_c1_stitch": bool(self.enforce_c1_stitch),
             "interior_method": self.interior_method,
+            "cdf_eval_method": self.cdf_eval_method,
         }
 
 

@@ -1,8 +1,7 @@
-"""Mixture inverse-CDF backend for 1D continuous component mixtures.
+"""Inverse-CDF backend for 1D continuous target distributions.
 
 Assumptions:
-- Mixture is over a single component axis (size K) represented on the final
-  broadcast axis of `component_distribution.cdf/log_prob`.
+- The target is scalar-valued and exposes callable `cdf(x)` and `log_prob(x)`.
 - Inputs are finite; `u` values are clamped to `[eps, 1 - eps]` internally.
 """
 
@@ -14,7 +13,6 @@ from typing import Any, Mapping
 import jax
 import jax.core as jcore
 import jax.numpy as jnp
-import jax.scipy as jsp
 import numpy as np
 
 
@@ -34,28 +32,23 @@ class BracketConfig:
 
 
 @dataclass(frozen=True)
-class MixtureQuantileBackend:
-    weights: jax.Array
-    log_weights: jax.Array
-    component_distribution: Any
+class DistributionQuantileBackend:
+    distribution: Any
     solver_cfg: SolverConfig
     bracket_cfg: BracketConfig
     eps: float
 
     def cdf(self, x: Any) -> jax.Array:
-        x_arr = jnp.asarray(x, dtype=self.weights.dtype)
-        comp = jnp.asarray(self.component_distribution.cdf(jnp.expand_dims(x_arr, -1)))
-        return jnp.sum(comp * self.weights, axis=-1)
+        x_arr = jnp.asarray(x)
+        return jnp.asarray(self.distribution.cdf(x_arr))
 
     def log_prob(self, x: Any) -> jax.Array:
-        x_arr = jnp.asarray(x, dtype=self.weights.dtype)
-        comp_log_prob = jnp.asarray(
-            self.component_distribution.log_prob(jnp.expand_dims(x_arr, -1))
-        )
-        return jsp.special.logsumexp(comp_log_prob + self.log_weights, axis=-1)
+        x_arr = jnp.asarray(x)
+        return jnp.asarray(self.distribution.log_prob(x_arr))
 
     def _solve_one(self, u_scalar: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
-        dtype = self.weights.dtype
+        cdf_probe = self.cdf(jnp.asarray(0.0))
+        dtype = jnp.asarray(cdf_probe).dtype
         u_clipped = jnp.clip(jnp.asarray(u_scalar, dtype=dtype), self.eps, 1.0 - self.eps)
 
         init_low = jnp.asarray(self.bracket_cfg.x_init_low, dtype=dtype)
@@ -163,7 +156,9 @@ class MixtureQuantileBackend:
 
     def icdf_with_status(self, u: Any) -> tuple[jax.Array, jax.Array, jax.Array]:
         self._validate_u_if_concrete(u)
-        u_arr = jnp.asarray(u, dtype=self.weights.dtype)
+        cdf_probe = self.cdf(jnp.asarray(0.0))
+        dtype = jnp.asarray(cdf_probe).dtype
+        u_arr = jnp.asarray(u, dtype=dtype)
         flat_u = u_arr.reshape(-1)
         x_flat, converged_flat, n_steps_flat = jax.vmap(self._solve_one)(flat_u)
         return (
@@ -178,12 +173,13 @@ class MixtureQuantileBackend:
             converged_np = np.asarray(jax.device_get(converged), dtype=bool)
             if not converged_np.all():
                 raise ValueError(
-                    "Failed to bracket root or converge bisection in mixture icdf."
+                    "Failed to bracket root or converge bisection in distribution icdf."
                 )
         return x
 
     def validate(self) -> dict[str, Any]:
-        u = jnp.linspace(self.eps, 1.0 - self.eps, 257, dtype=self.weights.dtype)
+        dtype = jnp.asarray(self.cdf(jnp.asarray(0.0))).dtype
+        u = jnp.linspace(self.eps, 1.0 - self.eps, 257, dtype=dtype)
         x, converged, n_steps = self.icdf_with_status(u)
         roundtrip_err = jnp.max(jnp.abs(self.cdf(x) - u))
         min_dx = jnp.min(jnp.diff(x))
@@ -229,48 +225,20 @@ def _as_bracket_cfg(
     raise TypeError("`bracket_cfg` must be a dict-like mapping or BracketConfig.")
 
 
-def _validate_weights(weights: jax.Array) -> jax.Array:
-    w = jnp.asarray(weights)
-    if w.ndim != 1:
-        raise ValueError("`weights` must be a 1D array.")
-    if w.size == 0:
-        raise ValueError("`weights` must not be empty.")
-    if not bool(np.asarray(jax.device_get(jnp.all(jnp.isfinite(w))))):
-        raise ValueError("`weights` must be finite.")
-    if bool(np.asarray(jax.device_get(jnp.any(w < 0.0)))):
-        raise ValueError("`weights` must be non-negative.")
-    total = float(np.asarray(jax.device_get(jnp.sum(w))))
-    if not np.isclose(total, 1.0, atol=1e-6):
-        raise ValueError("`weights` must sum to 1 within atol=1e-6.")
-    return w / jnp.sum(w)
-
-
-def _validate_component_distribution(
-    component_distribution: Any, weights: jax.Array
-) -> None:
-    cdf_fn = getattr(component_distribution, "cdf", None)
-    log_prob_fn = getattr(component_distribution, "log_prob", None)
+def _validate_distribution(distribution: Any) -> None:
+    cdf_fn = getattr(distribution, "cdf", None)
+    log_prob_fn = getattr(distribution, "log_prob", None)
     if not callable(cdf_fn) or not callable(log_prob_fn):
         raise ValueError(
-            "`component_distribution` must expose callable `cdf` and `log_prob`."
+            "`distribution` must expose callable `cdf` and `log_prob`."
         )
     try:
-        probe = jnp.asarray(0.0, dtype=weights.dtype)
-        cdf_probe = jnp.asarray(component_distribution.cdf(jnp.expand_dims(probe, -1)))
-        log_prob_probe = jnp.asarray(
-            component_distribution.log_prob(jnp.expand_dims(probe, -1))
-        )
-        _ = jnp.sum(cdf_probe * weights, axis=-1)
-        log_weights = jnp.where(
-            weights > 0.0,
-            jnp.log(weights),
-            jnp.asarray(-jnp.inf, dtype=weights.dtype),
-        )
-        _ = jsp.special.logsumexp(log_prob_probe + log_weights, axis=-1)
-    except Exception as exc:  # pragma: no cover - defensive guard
+        probe = jnp.asarray(0.0)
+        _ = jnp.asarray(distribution.cdf(probe))
+        _ = jnp.asarray(distribution.log_prob(probe))
+    except Exception as exc:
         raise ValueError(
-            "`component_distribution` cdf/log_prob outputs must broadcast with "
-            "weights on the final axis."
+            "`distribution` must support scalar `cdf` and `log_prob` evaluation."
         ) from exc
 
 
@@ -292,20 +260,15 @@ def _validate_bracket_cfg(bracket_cfg: BracketConfig) -> None:
         raise ValueError("`bracket_cfg.max_expansions` must be >= 0.")
 
 
-def build_mixture_quantile_backend(
+def build_distribution_quantile_backend(
     *,
-    weights: Any,
-    component_distribution: Any,
+    distribution: Any,
     solver_cfg: SolverConfig | Mapping[str, Any] | None = None,
     bracket_cfg: BracketConfig | Mapping[str, Any] | None = None,
     eps: float = 1e-10,
-) -> MixtureQuantileBackend:
-    """Build the inverse-CDF backend for a 1D continuous mixture.
+) -> DistributionQuantileBackend:
+    """Build the inverse-CDF backend for a 1D continuous target distribution."""
 
-    `u` inputs to `icdf` are internally clamped to `[eps, 1 - eps]`.
-    """
-
-    weights_arr = _validate_weights(jnp.asarray(weights))
     solver = _as_solver_cfg(solver_cfg)
     bracket = _as_bracket_cfg(bracket_cfg)
 
@@ -314,18 +277,19 @@ def build_mixture_quantile_backend(
 
     _validate_solver_cfg(solver)
     _validate_bracket_cfg(bracket)
-    _validate_component_distribution(component_distribution, weights_arr)
+    _validate_distribution(distribution)
 
-    log_weights = jnp.where(
-        weights_arr > 0.0,
-        jnp.log(weights_arr),
-        jnp.asarray(-jnp.inf, dtype=weights_arr.dtype),
-    )
-    return MixtureQuantileBackend(
-        weights=weights_arr,
-        log_weights=log_weights,
-        component_distribution=component_distribution,
+    return DistributionQuantileBackend(
+        distribution=distribution,
         solver_cfg=solver,
         bracket_cfg=bracket,
         eps=float(eps),
     )
+
+
+__all__ = [
+    "BracketConfig",
+    "DistributionQuantileBackend",
+    "SolverConfig",
+    "build_distribution_quantile_backend",
+]

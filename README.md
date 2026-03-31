@@ -1,25 +1,22 @@
 # numpyro-extras
 A collection of nice-to-have utilities that build off the NumPyro probabilistic programming language
 
-## Mixture Transform Builder
+## Distribution Transform Builder
 
 ```python
 import jax.numpy as jnp
-from numpyro.distributions import Categorical, MixtureSameFamily, Normal
-from numpyro_extras.mixture_transform_builder import (
-    MixtureTransformBuildConfig,
-    build_mixture_transform,
+from numpyro.distributions import Normal
+from numpyro_extras.distribution_transform_builder import (
+    DistributionTransformBuildConfig,
+    build_distribution_transform,
 )
 
-mixture = MixtureSameFamily(
-    Categorical(probs=jnp.array([0.55, 0.45])),
-    Normal(loc=jnp.array([-1.5, 2.0]), scale=jnp.array([0.9, 1.2])),
-)
+target = Normal(loc=0.0, scale=1.0)
 
-cfg = MixtureTransformBuildConfig()
-result = build_mixture_transform(
+cfg = DistributionTransformBuildConfig()
+result = build_distribution_transform(
     base="normal",
-    mixture=mixture,
+    distribution=target,
     build_cfg=cfg,
 )
 transform = result.transform
@@ -28,3 +25,9 @@ diagnostics = result.diagnostics
 z = jnp.linspace(-3.0, 3.0, 9)
 y = transform(z)
 ```
+
+`numpyro-extras` does not synthesize a generic CDF for arbitrary NumPyro
+distributions. The target distribution is expected to provide a working `cdf`
+and `log_prob` implementation, which typically comes from NumPyro itself. The
+package's role here is to build and cache quantile-based transforms on top of
+that interface.

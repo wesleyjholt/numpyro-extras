@@ -4,8 +4,8 @@ Required module:
 - `numpyro_extras.transforms` (expected file: `src/numpyro_extras/transforms.py`)
 
 Required public API:
-- `UniformToMixtureTransform`
-- `NormalToMixtureTransform`
+- `UniformToDistributionTransform`
+- `NormalToDistributionTransform`
 
 Behavioral pass gates:
 - forward/inverse roundtrip for uniform and normal base transforms
@@ -32,8 +32,8 @@ import jax.numpy as jnp
 
 
 MODULE_NAME = "numpyro_extras.transforms"
-UNIFORM_TRANSFORM_NAME = "UniformToMixtureTransform"
-NORMAL_TRANSFORM_NAME = "NormalToMixtureTransform"
+UNIFORM_TRANSFORM_NAME = "UniformToDistributionTransform"
+NORMAL_TRANSFORM_NAME = "NormalToDistributionTransform"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,14 +83,14 @@ def _get_transform_types():
 
     if uniform_type is None:
         pytest.fail(
-            "Missing `UniformToMixtureTransform` in `numpyro_extras.transforms`."
+            "Missing `UniformToDistributionTransform` in `numpyro_extras.transforms`."
         )
     if normal_type is None:
-        pytest.fail("Missing `NormalToMixtureTransform` in `numpyro_extras.transforms`.")
+        pytest.fail("Missing `NormalToDistributionTransform` in `numpyro_extras.transforms`.")
     if not callable(uniform_type):
-        pytest.fail("`UniformToMixtureTransform` must be callable.")
+        pytest.fail("`UniformToDistributionTransform` must be callable.")
     if not callable(normal_type):
-        pytest.fail("`NormalToMixtureTransform` must be callable.")
+        pytest.fail("`NormalToDistributionTransform` must be callable.")
     return uniform_type, normal_type
 
 
@@ -113,7 +113,7 @@ def _build_uniform_transform(interpolator, transform_cfg):
         except TypeError as exc:
             pytest.fail(
                 "Expected constructor signature "
-                "`UniformToMixtureTransform(interpolator=..., transform_cfg=...)` "
+                "`UniformToDistributionTransform(interpolator=..., transform_cfg=...)` "
                 f"or positional equivalent. Received TypeError: {exc}"
             )
 
@@ -145,7 +145,7 @@ def _build_normal_transform(interpolator, transform_cfg):
 
     pytest.fail(
         "Expected constructor signature "
-        "`NormalToMixtureTransform(interpolator=..., transform_cfg=...)` "
+        "`NormalToDistributionTransform(interpolator=..., transform_cfg=...)` "
         "or an equivalent form optionally accepting a standard normal distribution."
     )
 
@@ -161,16 +161,16 @@ def test_transform_api_contract(deterministic_interpolator):
     uniform_sig = inspect.signature(uniform_type)
     normal_sig = inspect.signature(normal_type)
     assert "interpolator" in uniform_sig.parameters, (
-        "`UniformToMixtureTransform` must accept `interpolator`."
+        "`UniformToDistributionTransform` must accept `interpolator`."
     )
     assert "interpolator" in normal_sig.parameters, (
-        "`NormalToMixtureTransform` must accept `interpolator`."
+        "`NormalToDistributionTransform` must accept `interpolator`."
     )
     assert "transform_cfg" in uniform_sig.parameters, (
-        "`UniformToMixtureTransform` must accept `transform_cfg`."
+        "`UniformToDistributionTransform` must accept `transform_cfg`."
     )
     assert "transform_cfg" in normal_sig.parameters, (
-        "`NormalToMixtureTransform` must accept `transform_cfg`."
+        "`NormalToDistributionTransform` must accept `transform_cfg`."
     )
 
     transform_cfg = _make_transform_cfg(clip_u_eps=1e-12)

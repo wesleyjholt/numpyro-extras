@@ -1,4 +1,4 @@
-"""NumPyro transforms that map base variables into mixture quantiles."""
+"""NumPyro transforms that map base variables into 1D target quantiles."""
 
 from __future__ import annotations
 
@@ -27,8 +27,8 @@ def _coerce_transform_cfg(transform_cfg: Any) -> tuple[float, bool]:
     return clip_u_eps, validate_args
 
 
-class UniformToMixtureTransform(Transform):
-    """Map `u in (0,1)` into mixture space via an interpolated inverse CDF."""
+class UniformToDistributionTransform(Transform):
+    """Map `u in (0,1)` into target space via an interpolated inverse CDF."""
 
     domain = constraints.unit_interval
     codomain = constraints.real
@@ -74,8 +74,8 @@ class UniformToMixtureTransform(Transform):
         )
 
 
-class NormalToMixtureTransform(Transform):
-    """Map `z in R` into mixture space via `u=Phi(z)` then interpolated `icdf(u)`."""
+class NormalToDistributionTransform(Transform):
+    """Map `z in R` into target space via `u=Phi(z)` then interpolated `icdf(u)`."""
 
     domain = constraints.real
     codomain = constraints.real
@@ -132,4 +132,7 @@ class NormalToMixtureTransform(Transform):
         )
 
 
-__all__ = ["UniformToMixtureTransform", "NormalToMixtureTransform"]
+__all__ = [
+    "UniformToDistributionTransform",
+    "NormalToDistributionTransform",
+]
