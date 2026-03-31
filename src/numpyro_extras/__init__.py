@@ -1,5 +1,6 @@
 """Public package API for numpyro_extras."""
 
+from .distributions import ShiftedScaledBeta
 from .mixture_quantile import (
     BracketConfig,
     MixtureQuantileBackend,
@@ -29,6 +30,7 @@ __all__ = [
     "MixtureTransformBuildConfig",
     "MixtureTransformBuildError",
     "MixtureTransformBuildResult",
+    "ShiftedScaledBeta",
     "SolverConfig",
     "TailConfig",
     "TransformConfig",
